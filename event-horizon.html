@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event Horizon</title>
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #f2ede4;
+    --dim: rgba(242, 237, 228, 0.5);
+    --line: rgba(242, 237, 228, 0.18);
+    --hot: #ffb070;
+    --ca: 0px;
+    --gutter: clamp(16px, 4vw, 40px);
+  }
+  body.inverted {
+    --ink: #07090f;
+    --dim: rgba(7, 9, 15, 0.55);
+    --line: rgba(7, 9, 15, 0.2);
+    --hot: #2748ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: #000; }
+  body {
+    background: #000;
+    color: var(--ink);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    transition: color 0.5s;
+  }
+  html.lenis, html.lenis body { height: auto; }
+  .lenis.lenis-smooth { scroll-behavior: auto !important; }
+
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; }
+
+  /* ---------- chrome ---------- */
+  .bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 14px) var(--gutter) 10px;
+    font-size: 11px; letter-spacing: 0.14em;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--ink); box-shadow: 0 0 0 3px var(--line);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 7px transparent; } }
+  .ctrls { display: flex; gap: 8px; }
+  .ctrls button {
+    font: inherit; letter-spacing: inherit; color: var(--ink);
+    background: transparent; border: 1px solid var(--line);
+    padding: 8px 11px; border-radius: 999px; cursor: pointer;
+    transition: background 0.25s, color 0.25s, border-color 0.5s;
+  }
+  .ctrls button:hover, .ctrls button.on { background: var(--ink); color: #000; }
+  body.inverted .ctrls button:hover, body.inverted .ctrls button.on { color: #fff; }
+
+  .gauge {
+    position: fixed; z-index: 20; left: var(--gutter); right: var(--gutter);
+    top: calc(env(safe-area-inset-top) + 52px); height: 1px; background: var(--line);
+  }
+  .gauge i { position: absolute; inset: 0; background: var(--ink); transform-origin: left; transform: scaleX(0); }
+
+  .readouts {
+    position: fixed; z-index: 20; left: var(--gutter); right: var(--gutter);
+    top: calc(env(safe-area-inset-top) + 64px);
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    font-size: 10px; letter-spacing: 0.12em;
+  }
+  .readouts div { display: flex; flex-direction: column; gap: 4px; }
+  .readouts div:nth-child(2) { text-align: center; align-items: center; }
+  .readouts div:nth-child(3) { text-align: right; align-items: flex-end; }
+  .readouts label { color: var(--dim); transition: color 0.5s; }
+  .readouts b {
+    font-weight: 500; font-size: clamp(15px, 3.4vw, 22px); letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .readouts b small { font-size: 0.55em; color: var(--dim); margin-left: 3px; }
+  #rYear.hot { color: var(--hot); }
+
+  /* ---------- stage ---------- */
+  .experience {
+    position: relative; z-index: 10; height: 100vh; width: 100%;
+    overflow: hidden; pointer-events: none;
+  }
+  .hero {
+    position: absolute; left: 0; right: 0; top: 23vh;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    text-align: center; padding: 0 var(--gutter);
+  }
+  .eyebrow { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); transition: color 0.5s; }
+  .title, .o-title {
+    font-family: "Instrument Serif", serif; font-style: italic; font-weight: 400;
+    font-size: clamp(68px, 17vw, 210px); line-height: 0.86; letter-spacing: -0.02em;
+    text-shadow: calc(var(--ca) * -1) 0 rgba(255, 50, 70, 0.75), var(--ca) 0 rgba(50, 200, 255, 0.75);
+  }
+  .title .char { will-change: transform, opacity; }
+  .hint {
+    position: absolute; left: 0; right: 0; bottom: 20vh; text-align: center;
+    font-size: 10px; letter-spacing: 0.22em; color: var(--dim);
+  }
+  .hint .touch { display: none; }
+  @media (pointer: coarse) { .hint .touch { display: inline; } .hint .mouse { display: none; } }
+  .copy {
+    position: absolute; left: 0; right: 0; top: 70vh; padding: 0 var(--gutter);
+    text-align: center;
+    font-family: "Instrument Serif", serif; font-size: clamp(28px, 6.4vw, 56px); line-height: 1.02;
+    text-shadow: 0 0 22px rgba(0, 0, 0, 0.7), calc(var(--ca) * -1) 0 rgba(255, 50, 70, 0.6), var(--ca) 0 rgba(50, 200, 255, 0.6);
+  }
+  .copy em { color: var(--hot); }
+  .outro {
+    position: absolute; left: 0; right: 0; top: 17vh; padding: 0 var(--gutter);
+    display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center;
+  }
+  .o-title { font-size: clamp(58px, 14vw, 180px); }
+  .o-sub { position: absolute; left: 0; right: 0; top: 70vh; text-align: center; font-size: 12px; letter-spacing: 0.08em; line-height: 1.7; }
+  .o-home { position: absolute; left: 0; right: 0; top: 79vh; text-align: center; font-size: 10px; letter-spacing: 0.22em; color: var(--dim); }
+
+  /* ---------- loader ---------- */
+  .loader {
+    position: fixed; inset: 0; z-index: 50; background: #000;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px;
+    font-size: 11px; letter-spacing: 0.2em; color: #f2ede4;
+  }
+  .loader-row { display: flex; gap: 22px; }
+  .loader-line { width: min(260px, 60vw); height: 1px; background: rgba(242, 237, 228, 0.18); position: relative; }
+  .loader-line i { position: absolute; inset: 0; background: #f2ede4; transform-origin: left; transform: scaleX(0); }
+  .fail { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 24px; z-index: 60; background: #000; }
+
+  .track { height: 1px; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="loader">
+  <div class="loader-row"><span>CALIBRATING SPACETIME</span><span id="pct">000</span></div>
+  <div class="loader-line"><i></i></div>
+</div>
+
+<header class="bar">
+  <div class="brand"><span class="dot"></span>EVENT HORIZON</div>
+  <div class="ctrls">
+    <button id="autoBtn" type="button">AUTOPILOT</button>
+    <button id="sndBtn" type="button">SOUND</button>
+  </div>
+</header>
+<div class="gauge"><i></i></div>
+<div class="readouts">
+  <div><label>DISTANCE</label><b id="rDist">—</b></div>
+  <div><label>EARTH YEAR</label><b id="rYear">2026</b></div>
+  <div><label>YOUR CLOCK</label><b id="rClock">00:00.00</b></div>
+</div>
+
+<main>
+  <section class="experience">
+    <div class="hero">
+      <p class="eyebrow hero-eyebrow">SGR A* · 26,673 LIGHT-YEARS FROM HOME</p>
+      <h1 class="title">nothing escapes.</h1>
+    </div>
+    <p class="hint">SCROLL TO FALL IN · <span class="mouse">MOVE TO BEND LIGHT</span><span class="touch">DRAG TO BEND LIGHT</span></p>
+
+    <div class="copy copy-a"><p>Every second you spend here,<br><em>decades</em> pass on Earth.</p></div>
+    <div class="copy copy-b"><p>Past this line,<br>even <em>light</em> can't turn back.</p></div>
+
+    <div class="outro">
+      <p class="eyebrow o-eyebrow">EVENT HORIZON — CROSSED</p>
+      <h2 class="o-title">welcome to the<br>other side.</h2>
+    </div>
+    <p class="o-sub">You left Earth in 2026.<br>Earth did not wait for you.</p>
+    <p class="o-home">↑ SCROLL UP TO GO HOME. IF YOU CAN.</p>
+  </section>
+</main>
+
+<div class="fail" id="fail"><p>Your device can't render spacetime (WebGL unavailable).</p></div>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/SplitText.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/CustomEase.min.js"></script>
+<script src="https://unpkg.com/lenis@1.3.11/dist/lenis.min.js"></script>
+<script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" } }
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+const { gsap, ScrollTrigger, SplitText, CustomEase, Lenis } = window;
+gsap.registerPlugin(ScrollTrigger, SplitText, CustomEase);
+CustomEase.create("hop", "0.9, 0, 0.1, 1");
+CustomEase.create("glide", "0.8, 0, 0.2, 1");
+ScrollTrigger.config({ ignoreMobileResize: true });
+
+/* =========================================================
+   CONFIG — every tunable lives here
+   ========================================================= */
+const CONFIG = {
+  pinLength: 9,              // scroll distance in viewports
+  distStart: 26,             // camera radius, in Schwarzschild radii
+  distEnd: 1.035,            // a hair above the horizon
+  distExit: 18,              // how far we drift from the white hole
+  introZoom: 1.9,            // camera starts this much further out during ignition
+  inclStart: 0.2, inclEnd: 0.035, inclExit: 0.32,
+  rollStart: -0.16,
+  fovStart: 0.85, fovEnd: 1.45,
+  orbitSpeed: 0.035,         // idle camera drift (rad/s)
+  diskIn: 2.6, diskOut: 12.0,
+  mouseMass: 0.0018,         // finger-lens strength (uv² units)
+  mouseLerp: 0.09,
+  startYear: 2026,
+  autopilotSeconds: 18,
+  aberration: 1.0,           // 1 = full infall speed; <1 keeps the hole readable
+  maxPixels: 2.4e6,          // hard cap on render-target pixels
+  quality: {
+    desktop: { steps: 170, stepK: 0.055, scale: 1.0 },
+    mobile:  { steps: 110, stepK: 0.075, scale: 0.62 },
+  },
+};
+
+// phases as [start, duration] of the pinned progress
+const PHASE = {
+  fall:  [0.00, 0.80],
+  spag:  [0.025, 0.28],
+  copyA: [0.31, 0.21],
+  copyB: [0.56, 0.21],
+  cross: [0.80, 0.07],
+  exit:  [0.87, 0.13],
+  outro: 0.915,
+};
+
+const SPAG = {
+  span: 0.42,        // per-char share of the phase
+  spin: 3.4,         // radians of orbit gained on the way in
+  stretch: 9,        // tidal elongation (radial)
+  squeeze: 3.2,      // tidal compression (tangential)
+  blur: 3.5,
+};
+
+/* =========================================================
+   Shaders — Schwarzschild geodesic ray tracer
+   ========================================================= */
+const vertexShader = /* glsl */`
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = vec4(position.xy * 2.0, 0.0, 1.0); }
+`;
+
+const fragmentShader = /* glsl */`
+  precision highp float;
+  varying vec2 vUv;
+  uniform vec2 uRes;
+  uniform float uTime, uDist, uIncl, uAzim, uRoll, uFov;
+  uniform vec2 uMouse;
+  uniform float uMouseMass, uIgnite, uFeed, uFlash, uInvert, uShake, uBeta;
+
+  #define RIN ${CONFIG.diskIn.toFixed(2)}
+  #define ROUT ${CONFIG.diskOut.toFixed(2)}
+
+  float hash31(vec3 p) {
+    p = fract(p * vec3(443.897, 441.423, 437.195));
+    p += dot(p, p.yzx + 19.19);
+    return fract((p.x + p.y) * p.z);
+  }
+  float noise(vec3 p) {
+    vec3 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash31(i), hash31(i + vec3(1,0,0)), f.x), mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x), mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y),
+      f.z);
+  }
+  float fbm(vec3 p) {
+    float a = 0.5, s = 0.0;
+    for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; }
+    return s;
+  }
+
+  vec3 starLayer(vec3 d, float scale, float thresh, float size) {
+    vec3 p = d * scale;
+    vec3 id = floor(p);
+    vec3 f = fract(p) - 0.5;
+    float h = hash31(id);
+    if (h < thresh) return vec3(0.0);
+    vec3 o = vec3(hash31(id + 3.1), hash31(id + 7.7), hash31(id + 1.3)) - 0.5;
+    float dd = length(f - o * 0.6);
+    float s = size * (0.6 + hash31(id + 5.0));
+    float b = smoothstep(s, 0.0, dd) + 0.12 * smoothstep(s * 5.0, 0.0, dd);
+    float tw = 0.7 + 0.3 * sin(uTime * (1.0 + h * 3.0) + h * 40.0);
+    vec3 tint = mix(vec3(1.0, 0.78, 0.6), vec3(0.7, 0.82, 1.0), hash31(id + 9.0));
+    return tint * b * tw * (0.4 + 2.2 * (h - thresh) / (1.0 - thresh));
+  }
+
+  vec3 background(vec3 d) {
+    float band = exp(-pow((d.y * 0.9 + 0.35 * d.x) * 2.6, 2.0));
+    float n  = fbm(d * 2.2);
+    float n2 = fbm(d * 4.8 + 11.0);
+    vec3 neb = mix(vec3(0.16, 0.05, 0.26), vec3(0.03, 0.13, 0.3), n2) * smoothstep(0.38, 0.95, n);
+    vec3 col = neb * (0.25 + band * 0.9);
+    col += vec3(0.55, 0.45, 0.38) * band * 0.07 * n2;
+    col += starLayer(d, 70.0, 0.9, 0.09);
+    col += starLayer(d.zxy, 150.0, 0.86, 0.12) * 0.55;
+    col += starLayer(d.yzx, 32.0, 0.975, 0.07) * 1.6;
+    return col;
+  }
+
+  vec4 disk(vec3 p, vec3 rd) {
+    float r = length(p.xz);
+    if (r < RIN || r > ROUT) return vec4(0.0);
+    float ang = atan(p.z, p.x);
+    float omega = 2.2 * pow(r, -1.5);
+    float a = ang - uTime * omega;
+    vec2 q = vec2(cos(a), sin(a)) * r;
+    float n = fbm(vec3(q * 0.85, r * 0.55));
+    float streak = fbm(vec3(q * 2.4, r * 3.2 + 3.0));
+    float dens = smoothstep(RIN, RIN + 0.7, r) * smoothstep(ROUT, ROUT * 0.5, r);
+    dens *= 0.25 + 1.3 * n * n + 0.55 * streak * streak;
+
+    float t = pow(RIN / r, 1.15);
+    vec3 c = mix(vec3(0.7, 0.14, 0.02), vec3(1.0, 0.5, 0.15), smoothstep(0.0, 0.45, t));
+    c = mix(c, vec3(1.0, 0.92, 0.8), smoothstep(0.45, 1.0, t));
+
+    // relativistic Doppler beaming + gravitational redshift
+    vec3 v = normalize(vec3(-p.z, 0.0, p.x));
+    float beta = clamp(sqrt(0.5 / max(r - 1.0, 0.2)), 0.0, 0.7);
+    float cosT = dot(v, -normalize(rd));
+    float D = sqrt(1.0 - beta * beta) / (1.0 - beta * cosT);
+    float g = sqrt(max(1.0 - 1.0 / r, 0.0));
+    c = mix(c, c * vec3(0.6, 0.8, 1.3) + vec3(0.0, 0.04, 0.12), clamp(D - 1.0, 0.0, 1.0) * 0.55);
+    c = mix(c, c * vec3(1.15, 0.5, 0.3), clamp(1.0 - D, 0.0, 1.0) * 0.8);
+    float I = dens * pow(D, 3.0) * g * (1.0 + uFeed * 2.0) * 1.9;
+    return vec4(c * I, clamp(dens * 2.2, 0.0, 0.97));   // optically thick: hides the lensed underside
+  }
+
+  void main() {
+    vec2 frag = vUv * uRes;
+    float m = min(uRes.x, uRes.y);
+    vec2 uv = (frag - 0.5 * uRes) / m;
+    uv += uShake * 0.006 * vec2(sin(uTime * 53.0), cos(uTime * 47.0));
+
+    // the viewer's finger is a second point mass
+    vec2 dm = uv - uMouse;
+    float r2m = dot(dm, dm);
+    uv -= uMouseMass * dm / (r2m + 1e-5);
+    float eR = sqrt(uMouseMass);
+    float mShadow = smoothstep(eR * 0.5, eR * 0.72, sqrt(r2m));
+
+    float cr = cos(uRoll), sr = sin(uRoll);
+    uv = mat2(cr, -sr, sr, cr) * uv;
+
+    vec3 cam = uDist * vec3(cos(uIncl) * cos(uAzim), sin(uIncl), cos(uIncl) * sin(uAzim));
+    vec3 fw = normalize(-cam);
+    vec3 rt = normalize(cross(fw, vec3(0.0, 1.0, 0.0)));
+    vec3 up = cross(rt, fw);
+    vec3 rd = normalize(fw + (uv.x * rt + uv.y * up) * uFov);
+
+    // a falling observer's view: relativistic aberration pulls the sky forward
+    float cm = dot(rd, fw);
+    float cs = (cm - uBeta) / (1.0 - uBeta * cm);
+    vec3 perp = rd - cm * fw;
+    float pl = length(perp);
+    perp = pl > 1e-5 ? perp / pl : rt;
+    rd = normalize(cs * fw + sqrt(max(0.0, 1.0 - cs * cs)) * perp);
+    float dop = sqrt(1.0 - uBeta * uBeta) / (1.0 - uBeta * cm);
+
+    vec3 pos = cam, vel = rd;
+    pos += vel * 0.6 * STEP_K * uDist * hash31(vec3(frag, 7.0));   // dither the march: banding -> grain
+    vec3 hv = cross(pos, vel);
+    float h2 = dot(hv, hv);
+    vec4 acc = vec4(0.0);
+    vec3 glow = vec3(0.0);
+    float captured = 0.0;
+    float ignDisk = smoothstep(0.25, 1.0, uIgnite);
+
+    for (int i = 0; i < STEPS; i++) {
+      float r2 = dot(pos, pos);
+      float r = sqrt(r2);
+      float dt = clamp(STEP_K * r * mix(0.4, 1.0, smoothstep(1.2, 3.0, r)), 0.012, 2.0);   // finer near the photon sphere
+      vec3 a = -1.5 * h2 * pos / (r2 * r2 * r);
+      vec3 npos = pos + vel * dt;
+      vel += a * dt;
+
+      if (pos.y * npos.y < 0.0) {
+        vec3 ip = mix(pos, npos, pos.y / (pos.y - npos.y));
+        vec4 dc = disk(ip, vel) * ignDisk;
+        acc.rgb += (1.0 - acc.a) * dc.rgb;
+        acc.a += (1.0 - acc.a) * dc.a;
+      }
+      float rr = length(npos.xz);
+      float vis = 1.0 - acc.a;   // glow behind the disk is occluded by it
+      glow += vis * dt * exp(-abs(npos.y) * 2.5) * smoothstep(ROUT, RIN, rr) * smoothstep(RIN * 0.6, RIN, rr) * vec3(1.0, 0.45, 0.16) * 0.012;
+      glow += vis * dt * exp(-pow((r - 1.5) * 5.0, 2.0)) * vec3(1.0, 0.72, 0.45) * 0.05;
+
+      pos = npos;
+      if (dot(pos, pos) < 1.0) { captured = 1.0; break; }
+      if (dot(pos, vel) > 0.0 && r > ROUT + 2.0) break;
+      if (acc.a > 0.985) break;
+    }
+
+    vec3 bg = background(normalize(vel)) * (1.0 - captured) * smoothstep(0.0, 0.6, uIgnite);
+    vec3 col = acc.rgb + (1.0 - acc.a) * bg + glow * ignDisk * (1.0 + uFeed * 1.5);
+
+    // Doppler: ahead blueshifts and brightens, behind reddens and dims
+    float dB = clamp(dop, 0.3, 3.0);
+    col *= mix(1.0, pow(dB, 1.4), step(1e-4, uBeta));
+    col = mix(col, col * vec3(0.6, 0.85, 1.35), clamp(dB - 1.0, 0.0, 1.0) * 0.5);
+    col = mix(col, col * vec3(1.3, 0.55, 0.35), clamp(1.0 - dB, 0.0, 1.0) * 0.6);
+
+    col *= mShadow;
+    col += exp(-pow((sqrt(r2m) - eR) / (eR * 0.1 + 1e-4), 2.0)) * 0.3 * vec3(1.0, 0.8, 0.6) * step(1e-6, uMouseMass);
+
+    col = 1.0 - exp(-col * 1.35);                       // filmic-ish shoulder
+    vec2 suv = (frag - 0.5 * uRes) / m;
+    col *= 1.0 - 0.28 * dot(suv, suv);                   // vignette
+
+    vec3 inv = (1.0 - col) * vec3(0.9, 0.96, 1.05);     // the negative universe
+    inv = mix(inv, inv * inv, 0.25);
+    col = mix(col, inv, uInvert);
+
+    col += uFlash * vec3(1.0, 0.96, 0.9) * (0.7 + 0.9 * exp(-length(suv) * 2.2));
+    col += (hash31(vec3(frag, uTime)) - 0.5) * 0.035;  // grain
+    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  }
+`;
+
+/* =========================================================
+   Renderer — orthographic 1×1 plane rig (PATTERNS §7)
+   ========================================================= */
+const canvas = document.getElementById("gl");
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
+} catch (e) {
+  document.getElementById("fail").style.display = "grid";
+  throw e;
+}
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0.01, 10);
+camera.position.z = 1;
+
+const uniforms = {
+  uRes: { value: new THREE.Vector2(1, 1) },
+  uTime: { value: 0 },
+  uDist: { value: CONFIG.distStart * CONFIG.introZoom },
+  uIncl: { value: CONFIG.inclStart },
+  uAzim: { value: 0 },
+  uRoll: { value: CONFIG.rollStart },
+  uFov: { value: CONFIG.fovStart },
+  uMouse: { value: new THREE.Vector2(0, 0) },
+  uMouseMass: { value: 0 },
+  uIgnite: { value: 0 },
+  uFeed: { value: 0 },
+  uFlash: { value: 0 },
+  uInvert: { value: 0 },
+  uShake: { value: 0 },
+  uBeta: { value: 0 },
+};
+const material = new THREE.ShaderMaterial({
+  vertexShader, fragmentShader, uniforms,
+  defines: { STEPS: 150, STEP_K: "0.06" },
+  depthTest: false, depthWrite: false,
+});
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material));
+
+let renderScale = 1;
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  let pr = Math.min(window.devicePixelRatio, 2) * renderScale;
+  pr = Math.min(pr, Math.sqrt(CONFIG.maxPixels / (w * h)));
+  renderer.setPixelRatio(pr);
+  renderer.setSize(w, h, false);
+  renderer.getDrawingBufferSize(uniforms.uRes.value);
+}
+
+const mm = gsap.matchMedia();
+mm.add(
+  { isMobile: "(max-width: 768px), (pointer: coarse)", isDesktop: "(min-width: 769px) and (pointer: fine)" },
+  (ctx) => {
+    const q = ctx.conditions.isMobile ? CONFIG.quality.mobile : CONFIG.quality.desktop;
+    material.defines.STEPS = q.steps;
+    material.defines.STEP_K = q.stepK.toFixed(3);
+    material.needsUpdate = true;
+    renderScale = q.scale;
+    resize();
+  }
+);
+
+/* =========================================================
+   Scroll — Lenis on the GSAP ticker (PATTERNS §0)
+   ========================================================= */
+history.scrollRestoration = "manual";
+window.scrollTo(0, 0);
+const lenis = new Lenis();
+lenis.on("scroll", ScrollTrigger.update);
+gsap.ticker.add((time) => lenis.raf(time * 1000));
+gsap.ticker.lagSmoothing(0);
+lenis.stop();
+
+/* =========================================================
+   State the scroll writes and the render loop reads
+   ========================================================= */
+const sim = {
+  dist: CONFIG.distStart, incl: CONFIG.inclStart, roll: CONFIG.rollStart, azim: 0,
+  fov: CONFIG.fovStart, beta: 0, feed: 0, flash: 0, invert: 0, shake: 0, crossed: false, p: 0,
+};
+const intro = { zoom: CONFIG.introZoom };
+const ph = (p, [s, d]) => gsap.utils.clamp(0, 1, (p - s) / d);
+const lerp = gsap.utils.interpolate;
+const smooth = (e0, e1, x) => { const t = gsap.utils.clamp(0, 1, (x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+const power3In = gsap.parseEase("power3.in");
+const power2Out = gsap.parseEase("power2.out");
+
+/* =========================================================
+   Text
+   ========================================================= */
+let titleSplit, heroEyebrow, hint, copyA, copyB, outroSplits;
+let charData = [];
+let spagQ = 0;
+
+function maskedLines(sel) {
+  const s = SplitText.create(sel, { type: "lines", mask: "lines", linesClass: "line" });
+  gsap.set(s.lines, { yPercent: 100, autoAlpha: 0 });
+  s._shown = false;
+  return s;
+}
+
+// latched one-shot inside a scrubbed pin — exits 3× faster, reverse stagger, direction-aware
+function latch(split, show, forward = true) {
+  if (split._shown === show) return;
+  split._shown = show;
+  gsap.killTweensOf(split.lines);
+  if (show) {
+    gsap.fromTo(split.lines, { yPercent: forward ? 100 : -100, autoAlpha: 1 }, { yPercent: 0, duration: 0.9, stagger: 0.1, ease: "power4.out" });
+  } else {
+    gsap.to(split.lines, { yPercent: forward ? -100 : 100, duration: 0.3, stagger: -0.05, ease: "power3.out", onComplete: () => gsap.set(split.lines, { autoAlpha: 0 }) });
+  }
+}
+
+function holeRadiusPx(D, fov) {
+  const s = Math.min(0.999, (2.598 / D) * Math.sqrt(Math.max(0, 1 - 1 / D)));
+  return (Math.tan(Math.asin(s)) / fov) * Math.min(window.innerWidth, window.innerHeight);
+}
+
+function measureChars() {
+  if (!titleSplit) return;
+  titleSplit.chars.forEach((el) => (el.style.transform = ""));
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  charData = titleSplit.chars.map((el) => {
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2 - cx;
+    const y = r.top + r.height / 2 - cy;
+    return { el, x, y, r0: Math.hypot(x, y), a0: Math.atan2(y, x), jitter: Math.random(), dirty: true };
+  });
+  const maxR = Math.max(...charData.map((d) => d.r0));
+  const minR = Math.min(...charData.map((d) => d.r0));
+  // chars nearest the hole fall first
+  charData.forEach((d) => (d.delay = ((d.r0 - minR) / (maxR - minR || 1)) * (1 - SPAG.span - 0.12) + d.jitter * 0.12));
+  applySpag(spagQ, true);
+}
+
+// Spaghettification — tidal stretch along the radial axis, compression across it
+function applySpag(q, force = false) {
+  spagQ = q;
+  const holeR = holeRadiusPx(sim.dist * intro.zoom, sim.fov);
+  let feed = 0;
+  for (const d of charData) {
+    const qi = gsap.utils.clamp(0, 1, (q - d.delay) / SPAG.span);
+    if (qi <= 0) {
+      if (d.dirty || force) {
+        d.el.style.transform = ""; d.el.style.opacity = ""; d.el.style.filter = ""; d.el.style.color = "";
+        d.dirty = false;
+      }
+      continue;
+    }
+    d.dirty = true;
+    const e = power3In(qi);
+    const target = Math.min(holeR * 1.04, d.r0 * 0.6);
+    const r = lerp(d.r0, target, e);
+    const a = d.a0 - SPAG.spin * e * e;
+    const ux = Math.cos(a), uy = Math.sin(a);
+    const tx = ux * r - d.x, ty = uy * r - d.y;
+    const s = 1 + SPAG.stretch * e * e;
+    const k = 1 / (1 + SPAG.squeeze * e);
+    const m11 = k + (s - k) * ux * ux, m12 = (s - k) * ux * uy, m22 = k + (s - k) * uy * uy;
+    d.el.style.transform = `matrix(${m11},${m12},${m12},${m22},${tx},${ty})`;
+    d.el.style.opacity = 1 - smooth(0.78, 1, qi);
+    d.el.style.filter = `blur(${(e * SPAG.blur).toFixed(2)}px)`;
+    // white → blackbody orange → redshifted crimson
+    const g = Math.round(lerp(240, 60, Math.min(1, e * 1.4)));
+    const b = Math.round(lerp(230, 20, Math.min(1, e * 2)));
+    d.el.style.color = `rgb(255,${g},${b})`;
+    feed += Math.sin(Math.PI * gsap.utils.clamp(0, 1, (qi - 0.8) / 0.2));
+  }
+  sim.feed = Math.min(1.6, (feed / Math.max(1, charData.length)) * 5);
+}
+
+/* =========================================================
+   The pinned fall — phase-sliced (PATTERNS §1)
+   ========================================================= */
+let mainTrigger;
+let lastP = 0;
+function buildScroll() {
+  mainTrigger = ScrollTrigger.create({
+    trigger: ".experience",
+    start: "top top",
+    end: () => `+=${window.innerHeight * CONFIG.pinLength}px`,
+    pin: true,
+    pinSpacing: true,
+    scrub: 1,
+    invalidateOnRefresh: true,
+    onUpdate: (self) => {
+      const p = self.progress;
+      const fwd = p >= lastP;
+      lastP = p;
+      sim.p = p;
+
+      const pFall = ph(p, PHASE.fall);
+      const pCross = ph(p, PHASE.cross);
+      const pExit = ph(p, PHASE.exit);
+
+      // geometric zoom: equal scroll = equal perceived approach
+      if (pExit > 0) {
+        sim.dist = CONFIG.distEnd * Math.pow(CONFIG.distExit / CONFIG.distEnd, power2Out(pExit));
+      } else {
+        sim.dist = CONFIG.distEnd * Math.pow(CONFIG.distStart / CONFIG.distEnd, 1 - pFall);
+      }
+      sim.incl = pExit > 0 ? lerp(CONFIG.inclEnd, CONFIG.inclExit, power2Out(pExit)) : lerp(CONFIG.inclStart, CONFIG.inclEnd, pFall);
+      sim.roll = CONFIG.rollStart + Math.pow(pFall, 3) * 1.3 - power2Out(pExit) * 1.1;
+      sim.azim = pFall * 1.5 + pExit * 2.2;
+      sim.fov = lerp(CONFIG.fovStart, CONFIG.fovEnd, Math.pow(pFall, 2)) - (CONFIG.fovEnd - CONFIG.fovStart) * power2Out(pExit) * 0.6;
+      // infall velocity (rs = 1 → β = √(1/r)), faded in once the plunge begins
+      sim.beta = Math.sqrt(1 / sim.dist) * smooth(0.42, 0.7, p) * (1 - pExit) * CONFIG.aberration;
+      sim.shake = Math.pow(ph(p, [0.55, 0.25]), 2) * (1 - pCross);
+      sim.flash = Math.pow(Math.sin(Math.PI * pCross), 2);
+      sim.invert = smooth(0.42, 0.58, pCross);
+      sim.crossed = pCross >= 0.5;
+      document.body.classList.toggle("inverted", sim.invert > 0.5);
+
+      applySpag(ph(p, PHASE.spag));
+
+      latch(heroEyebrow, p < 0.02, fwd);
+      latch(hint, p < 0.02, fwd);
+      latch(copyA, p > PHASE.copyA[0] && p < PHASE.copyA[0] + PHASE.copyA[1], fwd);
+      latch(copyB, p > PHASE.copyB[0] && p < PHASE.copyB[0] + PHASE.copyB[1], fwd);
+      outroSplits.forEach((s) => latch(s, p >= PHASE.outro, fwd));
+
+      gsap.set(".gauge i", { scaleX: p });
+    },
+  });
+}
+
+/* =========================================================
+   Pointer = a second mass
+   ========================================================= */
+const pointer = { x: 0, y: 0, tx: 0, ty: 0, active: false, amt: 0 };
+function toUv(cx, cy) {
+  const m = Math.min(window.innerWidth, window.innerHeight);
+  pointer.tx = (cx - window.innerWidth / 2) / m;
+  pointer.ty = -(cy - window.innerHeight / 2) / m;
+}
+window.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return;
+  toUv(e.clientX, e.clientY);
+  pointer.active = true;
+});
+document.addEventListener("pointerleave", () => (pointer.active = false));
+document.documentElement.addEventListener("mouseleave", () => (pointer.active = false));
+window.addEventListener("touchstart", (e) => {
+  const t = e.touches[0]; toUv(t.clientX, t.clientY);
+  if (!pointer.active) { pointer.x = pointer.tx; pointer.y = pointer.ty; }
+  pointer.active = true;
+}, { passive: true });
+window.addEventListener("touchmove", (e) => { const t = e.touches[0]; toUv(t.clientX, t.clientY); }, { passive: true });
+window.addEventListener("touchend", () => (pointer.active = false), { passive: true });
+
+/* =========================================================
+   HUD
+   ========================================================= */
+const rDist = document.getElementById("rDist");
+const rYear = document.getElementById("rYear");
+const rClock = document.getElementById("rClock");
+const hudCache = {};
+function setText(el, key, v) { if (hudCache[key] !== v) { hudCache[key] = v; el.innerHTML = v; } }
+function gammaAt(D) { return 1 / Math.sqrt(Math.max(1 - 1 / D, 1e-4)); }
+let clockStart = 0;
+function updateHud(time) {
+  const D = sim.dist * intro.zoom;
+  if (sim.crossed) {
+    setText(rDist, "d", `r &lt; r<small>s</small>`);
+    setText(rYear, "y", "∞");
+  } else {
+    setText(rDist, "d", `${D.toFixed(2)}<small>Rs</small>`);
+    const g = gammaAt(D) - 1;
+    const years = Math.floor(Math.pow(g, 3) * 900 + g * 40);
+    const yr = CONFIG.startYear + years;
+    setText(rYear, "y", yr < 10000 ? String(yr) : yr.toLocaleString("en-US"));
+  }
+  rYear.classList.toggle("hot", !sim.crossed && D < 3);
+  const t = clockStart ? time - clockStart : 0;
+  const mm = String(Math.floor(t / 60)).padStart(2, "0");
+  const ss = (t % 60).toFixed(2).padStart(5, "0");
+  setText(rClock, "c", `${mm}:${ss}`);
+}
+
+/* =========================================================
+   Sound — a drone that redshifts as you fall (off by default)
+   ========================================================= */
+const audio = { ctx: null, on: false };
+function initAudio() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 0;
+  const filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 500; filter.Q.value = 7;
+  filter.connect(master); master.connect(ctx.destination);
+  const voices = [[55, "sawtooth", 0.22], [55.4, "sawtooth", 0.22], [82.4, "triangle", 0.3], [27.5, "sine", 0.6]].map(([f, type, g]) => {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = f;
+    const gn = ctx.createGain(); gn.gain.value = g;
+    o.connect(gn); gn.connect(filter); o.start();
+    return { o, f };
+  });
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const data = noiseBuf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+  const noiseGain = ctx.createGain(); noiseGain.gain.value = 0;
+  noise.connect(noiseGain); noiseGain.connect(ctx.destination); noise.start();
+  Object.assign(audio, { ctx, master, filter, voices, noiseGain });
+}
+function updateAudio() {
+  if (!audio.ctx) return;
+  const t = audio.ctx.currentTime;
+  const g = sim.crossed ? 1 : gammaAt(sim.dist * intro.zoom);
+  const shift = sim.crossed ? 2 : 1 / Math.sqrt(g);          // gravitational redshift of the drone
+  audio.voices.forEach((v) => v.o.frequency.setTargetAtTime(v.f * shift, t, 0.08));
+  audio.filter.frequency.setTargetAtTime(sim.crossed ? 2400 : 250 + 1400 * (1 - 1 / g) + sim.feed * 600, t, 0.1);
+  audio.master.gain.setTargetAtTime(audio.on ? 0.16 + sim.feed * 0.05 : 0, t, 0.15);
+  audio.noiseGain.gain.setTargetAtTime(audio.on ? sim.flash * 0.22 + sim.shake * 0.03 : 0, t, 0.05);
+}
+const sndBtn = document.getElementById("sndBtn");
+sndBtn.addEventListener("click", () => {
+  if (!audio.ctx) initAudio();
+  audio.ctx.resume();
+  audio.on = !audio.on;
+  sndBtn.classList.toggle("on", audio.on);
+});
+
+/* =========================================================
+   Autopilot — a clean take for screen recording
+   ========================================================= */
+const autoBtn = document.getElementById("autoBtn");
+let auto = false, started = false;
+autoBtn.addEventListener("click", () => {
+  if (!started) return;
+  if (auto) {
+    auto = false;
+    lenis.scrollTo(lenis.animatedScroll, { immediate: true });
+  } else {
+    auto = true;
+    const atEnd = mainTrigger.progress > 0.995;
+    const target = atEnd ? 0 : mainTrigger.end;
+    const remaining = atEnd ? 0.3 : 1 - mainTrigger.progress;
+    lenis.scrollTo(target, {
+      duration: Math.max(2, CONFIG.autopilotSeconds * remaining),
+      easing: (t) => -(Math.cos(Math.PI * t) - 1) / 2,
+      force: true,
+      onComplete: () => { auto = false; autoBtn.classList.remove("on"); },
+    });
+  }
+  autoBtn.classList.toggle("on", auto);
+});
+window.addEventListener("keydown", (e) => { if (e.key === "a" || e.key === "A") autoBtn.click(); });
+
+/* =========================================================
+   Render loop — one ticker for scroll, shader and HUD
+   ========================================================= */
+let frames = 0, frameAcc = 0;
+gsap.ticker.add((time, deltaMs) => {
+  pointer.x += (pointer.tx - pointer.x) * CONFIG.mouseLerp;
+  pointer.y += (pointer.ty - pointer.y) * CONFIG.mouseLerp;
+  pointer.amt += ((pointer.active && started ? 1 : 0) - pointer.amt) * 0.05;
+
+  uniforms.uTime.value = time;
+  uniforms.uDist.value = sim.dist * intro.zoom;
+  uniforms.uIncl.value = sim.incl + pointer.y * 0.05 * pointer.amt;
+  uniforms.uAzim.value = sim.azim + time * CONFIG.orbitSpeed + pointer.x * 0.06 * pointer.amt;
+  uniforms.uRoll.value = sim.roll;
+  uniforms.uFov.value = sim.fov;
+  uniforms.uMouse.value.set(pointer.x, pointer.y);
+  uniforms.uMouseMass.value = CONFIG.mouseMass * pointer.amt;
+  uniforms.uFeed.value = sim.feed;
+  uniforms.uFlash.value = sim.flash;
+  uniforms.uInvert.value = sim.invert;
+  uniforms.uShake.value = sim.shake;
+  uniforms.uBeta.value = sim.beta;
+
+  gsap.set(document.documentElement, { "--ca": `${(sim.shake * 4 + sim.feed * 0.8).toFixed(2)}px` });
+
+  renderer.render(scene, camera);
+  updateHud(time);
+  updateAudio();
+
+  // adaptive resolution: hold ~40fps+ on weaker GPUs
+  if (started) {
+    frameAcc += deltaMs; frames++;
+    if (frames >= 60) {
+      if (frameAcc / frames > 25 && renderScale > 0.38) { renderScale *= 0.85; resize(); }
+      frames = 0; frameAcc = 0;
+    }
+  }
+});
+
+/* =========================================================
+   Ignition — entry sequence
+   ========================================================= */
+async function boot() {
+  await document.fonts.ready;
+
+  titleSplit = SplitText.create(".title", { type: "words,chars", charsClass: "char" });
+  heroEyebrow = maskedLines(".hero-eyebrow");
+  hint = maskedLines(".hint");
+  copyA = maskedLines(".copy-a p");
+  copyB = maskedLines(".copy-b p");
+  outroSplits = [".o-eyebrow", ".o-title", ".o-sub", ".o-home"].map(maskedLines);
+  gsap.set(titleSplit.chars, { opacity: 0 });
+
+  buildScroll();
+
+  const counter = { v: 0 };
+  const pct = document.getElementById("pct");
+  const tl = gsap.timeline();
+  tl.to(counter, { v: 100, duration: 1.7, ease: "power2.inOut", onUpdate: () => (pct.textContent = String(Math.round(counter.v)).padStart(3, "0")) })
+    .to(".loader-line i", { scaleX: 1, duration: 1.7, ease: "power2.inOut" }, 0)
+    .to(".loader", { clipPath: "inset(0% 0% 100% 0%)", duration: 1.0, ease: "hop" })
+    .to(uniforms.uIgnite, { value: 1, duration: 2.8, ease: "power2.out" }, "-=0.55")
+    .to(intro, { zoom: 1, duration: 3.4, ease: "power3.out" }, "<")
+    .fromTo(titleSplit.chars,
+      { opacity: 0, filter: "blur(18px)", scale: 1.9, yPercent: 35 },
+      { opacity: 1, filter: "blur(0px)", scale: 1, yPercent: 0, duration: 1.7, stagger: { each: 0.055, from: "center" }, ease: "power4.out" },
+      "<0.7")
+    .add(() => { latch(heroEyebrow, true); }, "<0.5")
+    .add(() => { latch(hint, true); }, "<0.5")
+    .add(() => {
+      gsap.set(titleSplit.chars, { clearProps: "opacity,filter,transform" });
+      document.querySelector(".loader").style.display = "none";
+      measureChars();
+      clockStart = gsap.ticker.time;
+      started = true;
+      lenis.start();
+      const jump = new URLSearchParams(location.search).get("p");   // ?p=0.5 jumps into the fall
+      if (jump) lenis.scrollTo(mainTrigger.start + (mainTrigger.end - mainTrigger.start) * parseFloat(jump), { immediate: true });
+    }, "-=0.2");
+}
+
+let resizeRaf = 0;
+window.addEventListener("resize", () => {
+  cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(() => { resize(); if (started) measureChars(); });
+});
+
+boot();
+</script>
+</body>
+</html>
